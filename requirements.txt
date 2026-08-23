@@ -1,5 +1,5 @@
 streamlit
 pandas
 reportlab
-google-generativeai
+google-genai
 pillow
