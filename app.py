@@ -1,3 +1,4 @@
+  
 import streamlit as st
 import pandas as pd
 from reportlab.lib.pagesizes import letter
@@ -5,13 +6,12 @@ from reportlab.pdfgen import canvas
 import io
 import zipfile
 from PIL import Image
-from google import genai
-from google.genai import types
+import google.generativeai as genai
 import json
 
 # Streamlit Page Config
 st.set_page_config(page_title="AI Result Card Generator", layout="wide")
-st.title("🎓 AI Result Card Generator (Handwritten to PDF)")
+st.title("🎓 AI Result Card Generator")
 
 # Sidebar Configurations
 st.sidebar.header("1. API Configuration")
@@ -23,29 +23,23 @@ address = st.sidebar.text_input("Address", "Lahore, Pakistan")
 
 # Function to extract structured data from image using Gemini API
 def extract_data_from_image(image, key):
-    client = genai.Client(api_key=key)
+    genai.configure(api_key=key)
+    model = genai.GenerativeModel('gemini-1.5-flash')
     
     prompt = """
-    Extract all student results from this image. Return a JSON array where each object represents a student.
+    Extract all student results from this image. Return ONLY a valid JSON array where each object represents a student.
     Keys required for each student:
     - Name (string)
     - RollNo (string)
     - Class (string)
     - Subject names as keys and their obtained marks as numeric values (e.g. "Math": 85, "Physics": 90)
     
-    Ensure subject names are consistent across all objects.
+    Do not add any markdown formatting like ```json or ```. Return plain JSON only.
     """
     
-    # Define JSON schema response constraint
-    response = client.models.generate_content(
-       model = genai.GenerativeModel("gemini-2.5-flash") ,
-        contents=[image, prompt],
-        config=types.GenerateContentConfig(
-            response_mime_type="application/json",
-        ),
-    )
-    
-    return json.loads(response.text)
+    response = model.generate_content([prompt, image])
+    text = response.text.replace("```json", "").replace("```", "").strip()
+    return json.loads(text)
 
 # Function to generate individual PDF Result Card
 def generate_pdf(student_data, academy, addr):
@@ -99,8 +93,6 @@ def generate_pdf(student_data, academy, addr):
 # Input Options Tab
 tab1, tab2 = st.tabs(["📸 Upload Handwritten Image", "📊 Upload Excel/CSV"])
 
-extracted_df = None
-
 with tab1:
     uploaded_img = st.file_uploader("Upload Image of Result Sheet (JPG/PNG)", type=['jpg', 'jpeg', 'png'])
     if uploaded_img:
@@ -141,7 +133,6 @@ if 'data' in st.session_state and st.session_state['data'] is not None:
         
         with zipfile.ZipFile(zip_buffer, "w") as zf:
             for idx, row in edited_df.iterrows():
-                # Convert row to dict, replacing NaN values
                 data_dict = row.dropna().to_dict()
                 pdf_bytes = generate_pdf(data_dict, academy_name, address)
                 student_name = data_dict.get('Name', f'Student_{idx+1}')
