@@ -1,4 +1,3 @@
-  
 import streamlit as st
 import pandas as pd
 from reportlab.lib.pagesizes import letter
@@ -6,7 +5,8 @@ from reportlab.pdfgen import canvas
 import io
 import zipfile
 from PIL import Image
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 import json
 
 # Streamlit Page Config
@@ -21,10 +21,9 @@ st.sidebar.header("2. Academy Details")
 academy_name = st.sidebar.text_input("Academy Name", "THE STEP-UP ACADEMY")
 address = st.sidebar.text_input("Address", "Lahore, Pakistan")
 
-# Function to extract structured data from image using Gemini API
+# Function to extract structured data from image using updated SDK
 def extract_data_from_image(image, key):
-    genai.configure(api_key=key)
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    client = genai.Client(api_key=key)
     
     prompt = """
     Extract all student results from this image. Return ONLY a valid JSON array where each object represents a student.
@@ -34,10 +33,17 @@ def extract_data_from_image(image, key):
     - Class (string)
     - Subject names as keys and their obtained marks as numeric values (e.g. "Math": 85, "Physics": 90)
     
-    Do not add any markdown formatting like ```json or ```. Return plain JSON only.
+    Do not wrap response in markdown fence. Plain JSON array only.
     """
     
-    response = model.generate_content([prompt, image])
+    response = client.models.generate_content(
+        model='gemini-2.5-flash',
+        contents=[image, prompt],
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+        ),
+    )
+    
     text = response.text.replace("```json", "").replace("```", "").strip()
     return json.loads(text)
 
@@ -125,7 +131,6 @@ if 'data' in st.session_state and st.session_state['data'] is not None:
     st.subheader("📋 Verify & Edit Extracted Results")
     st.info("Check for any handwriting misreadings before generating final PDFs.")
     
-    # Interactive Data Editor
     edited_df = st.data_editor(st.session_state['data'], num_rows="dynamic")
     
     if st.button("🚀 Generate All Result Cards (PDF)"):
